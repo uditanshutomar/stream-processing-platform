@@ -1,0 +1,225 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for metadata storage
+  postgres:
+    image: postgres:14
+    container_name: stream-postgres
+    environment:
+      POSTGRES_DB: stream_processing
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - stream-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: stream-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - stream-network
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: stream-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    networks:
+      - stream-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # JobManager
+  jobmanager:
+    build:
+      context: ..
+      dockerfile: jobmanager/Dockerfile
+    container_name: stream-jobmanager
+    ports:
+      - "8081:8081"  # REST API
+      - "6123:6123"  # gRPC
+    environment:
+      JOBMANAGER_HOST: jobmanager
+      JOBMANAGER_REST_PORT: 8081
+      JOBMANAGER_RPC_PORT: 6123
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: stream_processing
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      CHECKPOINT_INTERVAL: 10000
+      STATE_BACKEND: rocksdb
+      S3_CHECKPOINT_PATH: s3://stream-processing/checkpoints
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - stream-network
+
+  # TaskManager 1
+  taskmanager1:
+    build:
+      context: ..
+      dockerfile: taskmanager/Dockerfile
+    container_name: stream-taskmanager-1
+    environment:
+      TASK_MANAGER_ID: taskmanager-1
+      JOBMANAGER_HOST: jobmanager
+      JOBMANAGER_PORT: 6123
+      TASKMANAGER_RPC_PORT: 6124
+      TASK_SLOTS: 4
+      MEMORY_SIZE: 2048
+      STATE_BACKEND: rocksdb
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "6124:6124"
+      - "9091:9090"  # Metrics
+    volumes:
+      - taskmanager1_rocksdb:/data/rocksdb
+    depends_on:
+      - jobmanager
+      - kafka
+    networks:
+      - stream-network
+
+  # TaskManager 2
+  taskmanager2:
+    build:
+      context: ..
+      dockerfile: taskmanager/Dockerfile
+    container_name: stream-taskmanager-2
+    environment:
+      TASK_MANAGER_ID: taskmanager-2
+      JOBMANAGER_HOST: jobmanager
+      JOBMANAGER_PORT: 6123
+      TASKMANAGER_RPC_PORT: 6125
+      TASK_SLOTS: 4
+      MEMORY_SIZE: 2048
+      STATE_BACKEND: rocksdb
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "6125:6125"
+      - "9093:9090"  # Metrics (changed from 9092 to 9093)
+    volumes:
+      - taskmanager2_rocksdb:/data/rocksdb
+    depends_on:
+      - jobmanager
+      - kafka
+    networks:
+      - stream-network
+
+  # TaskManager 3
+  taskmanager3:
+    build:
+      context: ..
+      dockerfile: taskmanager/Dockerfile
+    container_name: stream-taskmanager-3
+    environment:
+      TASK_MANAGER_ID: taskmanager-3
+      JOBMANAGER_HOST: jobmanager
+      JOBMANAGER_PORT: 6123
+      TASKMANAGER_RPC_PORT: 6126
+      TASK_SLOTS: 4
+      MEMORY_SIZE: 2048
+      STATE_BACKEND: rocksdb
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "6126:6126"
+      - "9094:9090"  # Metrics (changed from 9093 to 9094)
+    volumes:
+      - taskmanager3_rocksdb:/data/rocksdb
+    depends_on:
+      - jobmanager
+      - kafka
+    networks:
+      - stream-network
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: stream-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - stream-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: stream-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - stream-network
+
+  # Web GUI for platform management
+  gui:
+    build:
+      context: ../gui/frontend
+      dockerfile: Dockerfile
+    container_name: stream-gui
+    ports:
+      - "3001:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8081
+      - REACT_APP_WS_URL=ws://localhost:8081
+    depends_on:
+      - jobmanager
+    networks:
+      - stream-network
+
+volumes:
+  postgres_data:
+  taskmanager1_rocksdb:
+  taskmanager2_rocksdb:
+  taskmanager3_rocksdb:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  stream-network:
+    driver: bridge

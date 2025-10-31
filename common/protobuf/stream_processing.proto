@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+package stream_processing;
+
+// Core data structures for stream processing
+
+message StreamRecord {
+    bytes key = 1;
+    bytes value = 2;
+    int64 timestamp = 3;
+    map<string, string> headers = 4;
+}
+
+message Watermark {
+    int64 timestamp = 1;
+}
+
+message CheckpointBarrier {
+    int64 checkpoint_id = 1;
+    int64 timestamp = 2;
+}
+
+message TaskDeployment {
+    string task_id = 1;
+    bytes serialized_operator = 2;
+    repeated string upstream_tasks = 3;
+    repeated string downstream_tasks = 4;
+    int32 parallelism = 5;
+    string checkpoint_path = 6;
+    int64 checkpoint_id = 7;
+}
+
+message TaskMetrics {
+    string task_id = 1;
+    int64 records_processed = 2;
+    double processing_latency_ms = 3;
+    double backpressure_ratio = 4;
+    int64 checkpoint_duration_ms = 5;
+}
+
+message HeartbeatRequest {
+    string task_manager_id = 1;
+    int32 available_slots = 2;
+    repeated TaskMetrics metrics = 3;
+}
+
+message HeartbeatResponse {
+    bool acknowledged = 1;
+}
+
+message DeployTaskRequest {
+    TaskDeployment task_deployment = 1;
+}
+
+message DeployTaskResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message CancelTaskRequest {
+    string task_id = 1;
+}
+
+message CancelTaskResponse {
+    bool success = 1;
+}
+
+message GetMetricsRequest {
+    string task_id = 1;
+}
+
+message GetMetricsResponse {
+    TaskMetrics metrics = 1;
+}
+
+message JobSubmission {
+    string job_name = 1;
+    bytes job_definition = 2;
+    map<string, string> config = 3;
+}
+
+message JobSubmissionResponse {
+    string job_id = 1;
+    string status = 2;
+}
+
+message GetJobStatusRequest {
+    string job_id = 1;
+}
+
+message GetJobStatusResponse {
+    string job_id = 1;
+    string status = 2;
+    int64 start_time = 3;
+    int64 end_time = 4;
+    map<string, string> metrics = 5;
+}
+
+message CancelJobRequest {
+    string job_id = 1;
+    bool with_savepoint = 2;
+}
+
+message CancelJobResponse {
+    bool success = 1;
+    string savepoint_path = 2;
+}
+
+message TriggerCheckpointRequest {
+    string job_id = 1;
+}
+
+message TriggerCheckpointResponse {
+    int64 checkpoint_id = 1;
+    int64 timestamp = 2;
+}
+
+message AcknowledgeCheckpointRequest {
+    string job_id = 1;
+    int64 checkpoint_id = 2;
+    string task_id = 3;
+    string state_path = 4;
+}
+
+message AcknowledgeCheckpointResponse {
+    bool acknowledged = 1;
+}
+
+// gRPC Services
+
+service TaskManagerService {
+    rpc DeployTask(DeployTaskRequest) returns (DeployTaskResponse);
+    rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
+    rpc GetMetrics(GetMetricsRequest) returns (GetMetricsResponse);
+    rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+service JobManagerService {
+    rpc SubmitJob(JobSubmission) returns (JobSubmissionResponse);
+    rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusResponse);
+    rpc CancelJob(CancelJobRequest) returns (CancelJobResponse);
+    rpc TriggerCheckpoint(TriggerCheckpointRequest) returns (TriggerCheckpointResponse);
+    rpc AcknowledgeCheckpoint(AcknowledgeCheckpointRequest) returns (AcknowledgeCheckpointResponse);
+}

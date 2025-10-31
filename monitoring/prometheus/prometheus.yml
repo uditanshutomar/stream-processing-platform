@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'stream-processing'
+
+scrape_configs:
+  # JobManager metrics
+  - job_name: 'jobmanager'
+    static_configs:
+      - targets: ['jobmanager:9090']
+        labels:
+          component: 'jobmanager'
+
+  # TaskManager metrics
+  - job_name: 'taskmanager'
+    static_configs:
+      - targets:
+          - 'taskmanager1:9090'
+          - 'taskmanager2:9090'
+          - 'taskmanager3:9090'
+        labels:
+          component: 'taskmanager'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
