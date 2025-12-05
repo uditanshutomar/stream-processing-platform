@@ -3,7 +3,8 @@
 A production-grade stream processing system inspired by Apache Flink, implementing exactly-once semantics, fault tolerance, and high-throughput data processing with Python.
 
 ---
-##Team
+# Team
+
 Uditanshu Tomar (Uditanshu.tomar@colorado.edu)
 Ishneet Chadha (Ishneet.chadha@colorado.edu)
 
