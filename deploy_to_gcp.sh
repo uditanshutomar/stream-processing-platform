@@ -28,8 +28,12 @@ echo "Step 1: Running GCP setup..."
 ./scripts/setup_gcp.sh
 
 echo ""
-echo "Step 2: Building and deploying..."
-./scripts/gcp_quick_test.sh
+echo "Step 2: Building images..."
+gcloud builds submit --config cloudbuild.yaml
+
+echo ""
+echo "Step 3: Deploying to Kubernetes..."
+./deploy_after_build.sh
 
 echo ""
 echo "=========================================="
