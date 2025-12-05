@@ -251,7 +251,7 @@ def handle_disconnect():
 
 if __name__ == '__main__':
     print("="*80)
-    print("🌊 Stream Processing Platform - Web GUI")
+    print("Stream Processing Platform - Web GUI")
     print("="*80)
     print()
     print("Starting server...")
@@ -271,12 +271,12 @@ if __name__ == '__main__':
     # Initialize infrastructure at startup
     print("Initializing stream processing infrastructure...")
     if init_infrastructure():
-        print("✓ Infrastructure initialized successfully")
+        print("[OK] Infrastructure initialized successfully")
         print("  - Resource Manager: 3 TaskManagers registered")
         print("  - Checkpoint Coordinator: Ready")
         print("  - Task Scheduler: Ready")
     else:
-        print("✗ Warning: Failed to initialize infrastructure")
+        print("[ERROR] Warning: Failed to initialize infrastructure")
     print()
 
     socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)

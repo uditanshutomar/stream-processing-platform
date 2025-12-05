@@ -75,9 +75,19 @@ class TaskMetrics:
 
         # Lock for thread safety
         self.lock = threading.Lock()
+        
+        # Local values for gRPC retrieval
+        self._records_processed_val = 0
+        self._processing_latency_val = 0.0
+        self._backpressure_ratio_val = 0.0
+        self._checkpoint_duration_val = 0
+        self._state_size_val = 0
 
     def record_processed(self):
         """Record a processed record"""
+        with self.lock:
+            self._records_processed_val += 1
+            
         self.records_processed.labels(
             task=self.task_id,
             operator=self.operator_id
@@ -90,6 +100,13 @@ class TaskMetrics:
         Args:
             latency_seconds: Latency in seconds
         """
+        with self.lock:
+            # Simple moving average
+            alpha = 0.1
+            self._processing_latency_val = (
+                alpha * (latency_seconds * 1000) + (1 - alpha) * self._processing_latency_val
+            )
+
         self.processing_latency.labels(
             operator=self.operator_id
         ).observe(latency_seconds)
@@ -102,6 +119,9 @@ class TaskMetrics:
             duration_seconds: Duration in seconds
             job_id: Job identifier
         """
+        with self.lock:
+            self._checkpoint_duration_val = int(duration_seconds * 1000)
+
         self.checkpoint_duration.labels(
             job=job_id
         ).observe(duration_seconds)
@@ -113,6 +133,9 @@ class TaskMetrics:
         Args:
             ratio: Backpressure ratio (0.0 to 1.0)
         """
+        with self.lock:
+            self._backpressure_ratio_val = ratio
+
         self.backpressure_ratio.labels(
             task=self.task_id
         ).set(ratio)
@@ -135,10 +158,24 @@ class TaskMetrics:
         Args:
             size_bytes: Size in bytes
         """
+        with self.lock:
+            self._state_size_val = size_bytes
+
         self.state_size_bytes.labels(
             task=self.task_id,
             operator=self.operator_id
         ).set(size_bytes)
+
+    def get_metrics_dict(self) -> Dict:
+        """Get current metrics as dictionary"""
+        with self.lock:
+            return {
+                'records_processed': self._records_processed_val,
+                'processing_latency_ms': self._processing_latency_val,
+                'backpressure_ratio': self._backpressure_ratio_val,
+                'checkpoint_duration_ms': self._checkpoint_duration_val,
+                'state_size_bytes': self._state_size_val
+            }
 
 
 class MetricsServer:

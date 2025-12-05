@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 WORKDIR /app
 
@@ -29,5 +29,5 @@ EXPOSE 6124 9090
 # Create volume for RocksDB state
 VOLUME ["/data/rocksdb"]
 
-# Run TaskManager
-CMD ["python", "-m", "taskmanager.task_executor", "--task-manager-id", "${TASK_MANAGER_ID}"]
+# Run TaskManager - using shell form to expand environment variables
+CMD python -m taskmanager.task_executor --task-manager-id $TASK_MANAGER_ID

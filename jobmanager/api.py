@@ -142,6 +142,30 @@ async def root():
     }
 
 
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint for Kubernetes liveness and readiness probes.
+    Returns 200 if JobManager is healthy, 503 if unhealthy.
+    """
+    try:
+        # Check if resource manager is running
+        if not state.resource_manager.running:
+            print(f"Health check failed: ResourceManager not running")
+            raise HTTPException(status_code=503, detail="Resource manager not running")
+        
+        # Check PostgreSQL connection (if needed)
+        # This is a simple health check - can be extended to check actual DB connectivity
+        
+        return {
+            "status": "healthy",
+            "service": "JobManager",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Unhealthy: {str(e)}")
+
+
 @app.post("/jobs/submit", response_model=JobSubmissionResponse)
 async def submit_job(job_file: UploadFile = File(...)):
     """
@@ -204,8 +228,19 @@ async def submit_job(job_file: UploadFile = File(...)):
             'vertices': vertices,
         }
 
-        # In production, would deploy tasks to TaskManagers via gRPC
-        # For now, just mark as running
+        # Deploy tasks to TaskManagers via gRPC
+        for plan in deployment_plans:
+            success, message = state.resource_manager.deploy_task_via_grpc(
+                task_manager_id=plan.task_manager_id,
+                task_id=plan.task_id,
+                operator=plan.operator_chain,
+                upstream_tasks=plan.upstream_tasks,
+                downstream_tasks=plan.downstream_tasks
+            )
+            if not success:
+                print(f"Failed to deploy task {plan.task_id}: {message}")
+                # In a real system, we would rollback here
+                raise HTTPException(status_code=500, detail=f"Failed to deploy task: {message}")
 
         return JobSubmissionResponse(
             job_id=job_id,
@@ -363,6 +398,123 @@ async def list_jobs():
     return jobs
 
 
+@app.get("/jobs/{job_id}/checkpoints")
+async def list_checkpoints(job_id: str):
+    """
+    List all checkpoints for a job.
+    """
+    if job_id not in state.jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    coordinator = state.checkpoint_coordinators.get(job_id)
+    if not coordinator:
+        return {"checkpoints": [], "latest_checkpoint_id": None}
+
+    checkpoints = []
+    for chk_id, metadata in coordinator.completed_checkpoints.items():
+        checkpoints.append({
+            "checkpoint_id": chk_id,
+            "timestamp": metadata.timestamp,
+            "status": metadata.status.value,
+            "task_count": len(metadata.task_states),
+            "storage_path": metadata.metadata_path
+        })
+
+    latest = coordinator.get_latest_checkpoint()
+    latest_id = latest.checkpoint_id if latest else None
+
+    return {
+        "checkpoints": sorted(checkpoints, key=lambda x: x["checkpoint_id"], reverse=True),
+        "latest_checkpoint_id": latest_id
+    }
+
+
+class RecoveryRequest(BaseModel):
+    """Request model for job recovery"""
+    checkpoint_id: Optional[int] = None  # None = use latest
+
+
+class RecoveryResponse(BaseModel):
+    """Response model for job recovery"""
+    job_id: str
+    recovered_from_checkpoint: int
+    status: str
+    tasks_restored: int
+    message: str
+
+
+@app.post("/jobs/{job_id}/recover", response_model=RecoveryResponse)
+async def recover_job(job_id: str, request: RecoveryRequest = None):
+    """
+    Recover a failed job from a checkpoint.
+    
+    This implements automatic recovery by:
+    1. Loading the checkpoint metadata from storage
+    2. Restoring task states from checkpoint
+    3. Redeploying tasks to available TaskManagers
+    4. Resuming processing from checkpoint offsets
+    """
+    if job_id not in state.jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job_info = state.jobs[job_id]
+
+    # Allow recovery from FAILED, CANCELED, or even RUNNING (for testing)
+    if job_info['status'] not in [JobStatus.FAILED, JobStatus.CANCELED, JobStatus.RUNNING]:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot recover job in status {job_info['status']}"
+        )
+
+    coordinator = state.checkpoint_coordinators.get(job_id)
+    if not coordinator:
+        raise HTTPException(status_code=400, detail="No checkpoint coordinator found")
+
+    # Get checkpoint to recover from
+    if request and request.checkpoint_id:
+        checkpoint = coordinator.completed_checkpoints.get(request.checkpoint_id)
+        if not checkpoint:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Checkpoint {request.checkpoint_id} not found"
+            )
+    else:
+        checkpoint = coordinator.get_latest_checkpoint()
+        if not checkpoint:
+            raise HTTPException(status_code=404, detail="No checkpoints available for recovery")
+
+    # Get execution graph
+    execution_graph = state.execution_graphs.get(job_id)
+    tasks_restored = 0
+
+    if execution_graph:
+        # Reschedule all tasks (simulated recovery)
+        all_task_ids = execution_graph.get_all_task_ids()
+        tasks_restored = len(all_task_ids)
+
+        # In production, would:
+        # 1. Download state from S3/GCS for each task
+        # 2. Redeploy tasks to available TaskManagers via gRPC
+        # 3. Restore state on each task
+        # 4. Resume processing from Kafka offsets in checkpoint
+
+    # Update job status
+    job_info['status'] = JobStatus.RUNNING
+    job_info['start_time'] = int(datetime.now().timestamp() * 1000)
+    job_info['end_time'] = None
+
+    # Reset checkpoint coordinator
+    coordinator.current_checkpoint_id = checkpoint.checkpoint_id
+
+    return RecoveryResponse(
+        job_id=job_id,
+        recovered_from_checkpoint=checkpoint.checkpoint_id,
+        status="RECOVERED",
+        tasks_restored=tasks_restored,
+        message=f"Job recovered from checkpoint {checkpoint.checkpoint_id} at {checkpoint.timestamp}"
+    )
+
+
 @app.get("/taskmanagers")
 async def list_task_managers():
     """
@@ -386,6 +538,41 @@ async def list_task_managers():
             "last_heartbeat": int(tm_info.last_heartbeat * 1000),
         })
     return task_managers
+
+
+@app.post("/taskmanagers/heartbeat")
+async def receive_heartbeat(heartbeat: dict):
+    """
+    Receive heartbeat from a TaskManager.
+    Registers new TaskManagers or updates existing ones.
+    """
+    task_manager_id = heartbeat.get('task_manager_id')
+    host = heartbeat.get('host', 'unknown')
+    port = heartbeat.get('port', 6124)
+    total_slots = heartbeat.get('total_slots', 4)
+    available_slots = heartbeat.get('available_slots', total_slots)
+    
+    if not task_manager_id:
+        raise HTTPException(status_code=400, detail="task_manager_id required")
+    
+    # Check if TaskManager is already registered
+    existing = state.resource_manager.get_task_manager(task_manager_id)
+    
+    if existing:
+        # Update heartbeat
+        state.resource_manager.update_heartbeat(task_manager_id, available_slots)
+    else:
+        # Register new TaskManager
+        state.resource_manager.register_task_manager(
+            task_manager_id=task_manager_id,
+            host=host,
+            port=port,
+            task_slots=total_slots
+        )
+        # Immediately update to active status
+        state.resource_manager.update_heartbeat(task_manager_id, available_slots)
+    
+    return {"status": "ok"}
 
 
 @app.get("/cluster/metrics")

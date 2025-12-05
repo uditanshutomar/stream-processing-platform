@@ -1,0 +1,54 @@
+steps:
+  # Build JobManager image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/stream-processing-jobmanager:latest'
+      - '-f'
+      - 'jobmanager/Dockerfile'
+      - '.'
+  
+  # Build TaskManager image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/stream-processing-taskmanager:latest'
+      - '-f'
+      - 'taskmanager/Dockerfile'
+      - '.'
+  
+  # Build GUI image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/stream-processing-gui:latest'
+      - '-f'
+      - 'gui/Dockerfile'
+      - '.'
+  
+  # Push JobManager image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/stream-processing-jobmanager:latest']
+  
+  # Push TaskManager image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/stream-processing-taskmanager:latest']
+  
+  # Push GUI image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/stream-processing-gui:latest']
+
+images:
+  - 'gcr.io/$PROJECT_ID/stream-processing-jobmanager:latest'
+  - 'gcr.io/$PROJECT_ID/stream-processing-taskmanager:latest'
+  - 'gcr.io/$PROJECT_ID/stream-processing-gui:latest'
+
+options:
+  machineType: 'N1_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '1200s'
+

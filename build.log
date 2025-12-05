@@ -1,0 +1,9 @@
+Creating temporary archive of 181 file(s) totalling 1.1 MiB before compression.
+Some files were not included in the source upload.
+
+Check the gcloud log [/Users/uditanshutomar/.config/gcloud/logs/2025.12.01/04.14.49.071223.log] to see which files and the contents of the
+default gcloudignore file used (see `$ gcloud topic gcloudignore` to learn
+more).
+
+Uploading tarball of [.] to [gs://dcsc-project-479911_cloudbuild/source/1764591289.261791-f0a3230375154fd8aafab05de366172a.tgz]
+ERROR: (gcloud.builds.submit) INVALID_ARGUMENT: invalid build: invalid image name "gcr.io/dcsc-project-479911/stream-processing-jobmanager:": could not parse reference: gcr.io/dcsc-project-479911/stream-processing-jobmanager:

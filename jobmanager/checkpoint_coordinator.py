@@ -21,6 +21,11 @@ except ImportError:
     boto3 = None
 
 try:
+    from google.cloud import storage as gcs_storage
+except ImportError:
+    gcs_storage = None
+
+try:
     import psycopg2
     import psycopg2.extras
 except ImportError:
@@ -87,15 +92,35 @@ class CheckpointCoordinator:
         self.checkpoint_thread: Optional[threading.Thread] = None
         self.running = False
 
-        # S3 client
+        # Storage clients
         self.s3_client = None
-        if boto3:
+        self.gcs_client = None
+        self.gcs_bucket = None
+        
+        storage_backend = Config.STORAGE_BACKEND.lower()
+        if storage_backend == "s3" and boto3:
             self.s3_client = boto3.client(
                 's3',
                 aws_access_key_id=Config.AWS_ACCESS_KEY_ID,
                 aws_secret_access_key=Config.AWS_SECRET_ACCESS_KEY,
                 region_name=Config.AWS_REGION
             )
+        elif storage_backend == "gcs" and gcs_storage:
+            try:
+                self.gcs_client = gcs_storage.Client()
+                bucket_name = Config.get_gcs_bucket()
+                self.gcs_bucket = self.gcs_client.bucket(bucket_name)
+                
+                # Verify bucket exists and is accessible
+                if not self.gcs_bucket.exists():
+                    print(f"Warning: GCS bucket {bucket_name} does not exist. It will be created on first use.")
+                else:
+                    print(f"GCS client initialized successfully. Using bucket: {bucket_name}")
+            except Exception as e:
+                print(f"Failed to initialize GCS client: {e}")
+                print("Checkpoint storage will fall back to local filesystem")
+                self.gcs_client = None
+                self.gcs_bucket = None
 
         # PostgreSQL connection
         self.pg_conn = None
@@ -313,7 +338,7 @@ class CheckpointCoordinator:
         state_data: bytes
     ) -> Optional[str]:
         """
-        Upload state snapshot to S3.
+        Upload state snapshot to storage (S3, GCS, or local).
 
         Args:
             checkpoint_id: Checkpoint identifier
@@ -322,42 +347,78 @@ class CheckpointCoordinator:
             state_data: State data to upload
 
         Returns:
-            S3 path or None on failure
+            Storage path or None on failure
         """
-        if not self.s3_client:
-            # Save locally for testing
+        storage_backend = Config.STORAGE_BACKEND.lower()
+        
+        # Local storage fallback
+        if storage_backend == "local" or (not self.s3_client and not self.gcs_bucket):
             local_path = f"/tmp/checkpoints/{self.job_id}/chk-{checkpoint_id}/{task_manager_id}/{task_id}.bin"
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
             with open(local_path, 'wb') as f:
                 f.write(state_data)
             return local_path
 
-        try:
-            # Parse S3 path
-            s3_path = Config.S3_CHECKPOINT_PATH
-            if s3_path.startswith('s3://'):
-                s3_path = s3_path[5:]
+        # Upload to S3
+        if storage_backend == "s3" and self.s3_client:
+            try:
+                s3_path = Config.S3_CHECKPOINT_PATH
+                if s3_path.startswith('s3://'):
+                    s3_path = s3_path[5:]
 
-            bucket, prefix = s3_path.split('/', 1)
-            key = f"{prefix}/job-{self.job_id}/chk-{checkpoint_id}/tm-{task_manager_id}/{task_id}.bin"
+                bucket, prefix = s3_path.split('/', 1)
+                key = f"{prefix}/job-{self.job_id}/chk-{checkpoint_id}/tm-{task_manager_id}/{task_id}.bin"
 
-            # Upload to S3
-            self.s3_client.put_object(
-                Bucket=bucket,
-                Key=key,
-                Body=state_data
-            )
+                self.s3_client.put_object(
+                    Bucket=bucket,
+                    Key=key,
+                    Body=state_data
+                )
 
-            return f"s3://{bucket}/{key}"
+                return f"s3://{bucket}/{key}"
+            except Exception as e:
+                print(f"Error uploading state to S3: {e}")
+                return None
 
-        except Exception as e:
-            print(f"Error uploading state to S3: {e}")
-            return None
+        # Upload to GCS
+        if storage_backend == "gcs" and self.gcs_bucket:
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    gcs_path = Config.GCS_CHECKPOINT_PATH
+                    if gcs_path.startswith('gs://'):
+                        gcs_path = gcs_path[5:]
+                    
+                    # Extract prefix if exists
+                    parts = gcs_path.split('/', 1)
+                    bucket_name = parts[0]
+                    prefix = parts[1] if len(parts) > 1 else ""
+                    
+                    blob_name = f"{prefix}/job-{self.job_id}/chk-{checkpoint_id}/tm-{task_manager_id}/{task_id}.bin"
+                    blob = self.gcs_bucket.blob(blob_name)
+                    
+                    # Upload with retry logic
+                    blob.upload_from_string(state_data)
+
+                    return f"gs://{bucket_name}/{blob_name}"
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        print(f"Error uploading state to GCS after {max_retries} attempts: {e}")
+                        return None
+                    print(f"GCS upload attempt {attempt + 1} failed: {e}, retrying...")
+                    time.sleep(2 ** attempt)  # Exponential backoff
+
+        return None
 
     def _get_metadata_path(self, checkpoint_id: int) -> str:
-        """Get S3 path for checkpoint metadata"""
-        s3_path = Config.S3_CHECKPOINT_PATH
-        return f"{s3_path}/job-{self.job_id}/chk-{checkpoint_id}/metadata.json"
+        """Get storage path for checkpoint metadata"""
+        storage_backend = Config.STORAGE_BACKEND.lower()
+        if storage_backend == "gcs":
+            gcs_path = Config.GCS_CHECKPOINT_PATH
+            return f"{gcs_path}/job-{self.job_id}/chk-{checkpoint_id}/metadata.json"
+        else:
+            s3_path = Config.S3_CHECKPOINT_PATH
+            return f"{s3_path}/job-{self.job_id}/chk-{checkpoint_id}/metadata.json"
 
     def _init_database(self):
         """Initialize database schema"""

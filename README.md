@@ -20,7 +20,7 @@ A production-grade stream processing system inspired by Apache Flink, implementi
 - **REST API**: FastAPI endpoints for job management
 - **Kafka Integration**: Exactly-once source/sink with offset management
 - **PostgreSQL**: Checkpoint metadata storage
-- **S3**: Distributed state persistence
+- **S3/GCS**: Distributed state persistence (supports both AWS S3 and Google Cloud Storage)
 
 ### Advanced Features
 
@@ -40,9 +40,39 @@ A production-grade stream processing system inspired by Apache Flink, implementi
 
 ### Launch the Platform
 
+**Option 1: Docker Compose (Local Development)**
+
 ```bash
 cd deployment
 docker-compose up -d
+```
+
+**Option 2: Google Cloud Platform (Production)**
+
+See the [GCP Deployment Guide](docs/gcp_deployment_guide.md) for detailed instructions, or use the automated setup script:
+
+```bash
+# Set your GCP project ID
+export GCP_PROJECT_ID="your-project-id"
+
+# Run setup script
+./scripts/setup_gcp.sh
+
+# Build and push images
+gcloud builds submit --config cloudbuild.yaml
+
+# Deploy to GKE
+cd deployment/kubernetes
+kubectl apply -f namespace.yaml
+kubectl apply -f postgres-secret.yaml
+kubectl apply -f postgres-deployment.yaml
+kubectl apply -f kafka-deployment.yaml
+kubectl apply -f rbac.yaml
+kubectl apply -f configmap.yaml
+kubectl apply -f jobmanager-deployment.yaml
+kubectl apply -f taskmanager-daemonset.yaml
+kubectl apply -f prometheus-deployment.yaml
+kubectl apply -f grafana-deployment.yaml
 ```
 
 This starts:
@@ -500,6 +530,8 @@ Inspired by Apache Flink's architecture and design principles. Built as a demons
 
 ---
 
-**Built with**: Python 3.9+, FastAPI, gRPC, RocksDB, Kafka, PostgreSQL, S3, Docker, Prometheus, Grafana
+**Built with**: Python 3.9+, FastAPI, gRPC, RocksDB, Kafka, PostgreSQL, S3/GCS, Docker, Kubernetes, Prometheus, Grafana
+
+**Deployment**: Supports Docker Compose (local) and Kubernetes on GCP (GKE), AWS (EKS), or any Kubernetes cluster
 
 **Performance**: 50K+ events/sec | <100ms latency | 99.9% uptime | Exactly-once semantics

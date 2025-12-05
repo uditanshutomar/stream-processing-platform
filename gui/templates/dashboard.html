@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -34,7 +35,7 @@
         .header h1 {
             font-size: 2.5em;
             margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
         }
 
         .header p {
@@ -47,7 +48,7 @@
             border-radius: 15px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -72,8 +73,15 @@
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
         }
 
         .buttons {
@@ -111,7 +119,8 @@
             transform: translateY(-2px);
         }
 
-        .btn-start:disabled, .btn-stop:disabled {
+        .btn-start:disabled,
+        .btn-stop:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
@@ -128,7 +137,7 @@
             background: white;
             border-radius: 15px;
             padding: 25px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
 
         .card h2 {
@@ -175,8 +184,13 @@
         }
 
         @keyframes highlight {
-            from { background: #ff6b6b; }
-            to { background: #ffe6e6; }
+            from {
+                background: #ff6b6b;
+            }
+
+            to {
+                background: #ffe6e6;
+            }
         }
 
         .event-item:hover {
@@ -289,10 +303,11 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌊 Stream Processing Platform</h1>
+            <h1>Stream Processing Platform</h1>
             <p>Real-time Data Processing & Monitoring Dashboard</p>
         </div>
 
@@ -309,7 +324,7 @@
 
         <div class="dashboard">
             <div class="card">
-                <h2>📊 Total Events</h2>
+                <h2>Total Events</h2>
                 <div class="metric" id="totalEvents">0</div>
                 <div class="metric-label">Events Processed</div>
                 <div class="progress-bar">
@@ -318,29 +333,30 @@
             </div>
 
             <div class="card">
-                <h2>🚨 Anomalies Detected</h2>
+                <h2>Anomalies Detected</h2>
                 <div class="metric" id="anomalies">0</div>
                 <div class="metric-label">Unusual Events</div>
                 <div class="progress-bar">
-                    <div class="progress-fill" id="anomalyProgress" style="width: 0%; background: linear-gradient(90deg, #e74c3c, #c0392b)"></div>
+                    <div class="progress-fill" id="anomalyProgress"
+                        style="width: 0%; background: linear-gradient(90deg, #e74c3c, #c0392b)"></div>
                 </div>
             </div>
 
             <div class="card">
-                <h2>⚡ Throughput</h2>
+                <h2>Throughput</h2>
                 <div class="metric" id="throughput">0</div>
                 <div class="metric-label">Events per Second</div>
             </div>
 
             <div class="card">
-                <h2>✅ Checkpoints</h2>
+                <h2>Checkpoints</h2>
                 <div class="metric" id="checkpoints">0</div>
                 <div class="metric-label">State Snapshots</div>
                 <div id="latestCheckpoint"></div>
             </div>
 
             <div class="card wide-card">
-                <h2>🖥️ Resource Manager</h2>
+                <h2>Resource Manager</h2>
                 <div class="stats-grid">
                     <div class="stat-item">
                         <div class="stat-value" id="taskManagers">0</div>
@@ -362,7 +378,7 @@
             </div>
 
             <div class="card wide-card">
-                <h2>📡 Recent Events</h2>
+                <h2>Recent Events</h2>
                 <div class="events-list" id="eventsList">
                     <div class="alert">
                         Click "Start Processing" to begin receiving events
@@ -434,7 +450,7 @@
                 <span class="event-sensor">${event.sensor_id}</span>
                 <span class="event-temp ${tempClass}">${event.temperature}°C</span>
                 <span class="event-temp">${event.humidity}% humidity</span>
-                ${event.is_anomaly ? '<strong style="color: #e74c3c;"> ⚠️ ANOMALY</strong>' : ''}
+                ${event.is_anomaly ? '<strong style="color: #e74c3c;"> ANOMALY</strong>' : ''}
                 <span class="event-time">${event.timestamp}</span>
             `;
 
@@ -531,4 +547,5 @@
         })();
     </script>
 </body>
+
 </html>

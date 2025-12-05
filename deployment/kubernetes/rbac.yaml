@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stream-processing-sa
+  namespace: stream-processing
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: stream-processing-role
+  namespace: stream-processing
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: stream-processing-rolebinding
+  namespace: stream-processing
+subjects:
+- kind: ServiceAccount
+  name: stream-processing-sa
+  namespace: stream-processing
+roleRef:
+  kind: Role
+  name: stream-processing-role
+  apiGroup: rbac.authorization.k8s.io
+

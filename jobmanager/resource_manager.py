@@ -3,6 +3,7 @@ ResourceManager - Manages TaskManager resources and health
 """
 import threading
 import time
+import pickle
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
@@ -12,6 +13,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from common.config import Config
+from jobmanager.grpc_client import TaskManagerClient, TaskManagerClientPool
 
 
 class TaskManagerStatus(Enum):
@@ -63,6 +65,9 @@ class ResourceManager:
         # Callbacks for failures
         self.failure_callbacks: List[callable] = []
 
+        # gRPC client pool for TaskManager communication
+        self.client_pool = TaskManagerClientPool()
+
     def start(self):
         """Start resource manager"""
         self.running = True
@@ -78,6 +83,9 @@ class ResourceManager:
         self.running = False
         if self.monitoring_thread:
             self.monitoring_thread.join(timeout=5)
+        
+        # Close all gRPC connections
+        self.client_pool.close_all()
         print("ResourceManager stopped")
 
     def register_task_manager(
@@ -255,6 +263,66 @@ class ResourceManager:
                 if info.is_healthy(self.heartbeat_timeout_ms)
             )
 
+    def deploy_task_via_grpc(
+        self,
+        task_manager_id: str,
+        task_id: str,
+        operator,
+        upstream_tasks: List[str],
+        downstream_tasks: List[str],
+        checkpoint_path: str = "",
+        checkpoint_id: int = 0
+    ) -> tuple:
+        """
+        Deploy a task to a TaskManager using gRPC.
+        
+        Args:
+            task_manager_id: Target TaskManager ID
+            task_id: Unique task identifier
+            operator: Operator to deploy (will be pickled)
+            upstream_tasks: List of upstream task IDs
+            downstream_tasks: List of downstream task IDs
+            checkpoint_path: Optional checkpoint path for recovery
+            checkpoint_id: Optional checkpoint ID for recovery
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        tm_info = self.get_task_manager(task_manager_id)
+        if not tm_info:
+            return False, f"TaskManager {task_manager_id} not found"
+
+        try:
+            # Get or create gRPC client
+            client = self.client_pool.get_client(
+                task_manager_id,
+                tm_info.host,
+                tm_info.port
+            )
+
+            # Serialize operator
+            serialized_operator = pickle.dumps(operator)
+
+            # Deploy via gRPC
+            success, message = client.deploy_task(
+                task_id=task_id,
+                serialized_operator=serialized_operator,
+                upstream_tasks=upstream_tasks,
+                downstream_tasks=downstream_tasks,
+                checkpoint_path=checkpoint_path,
+                checkpoint_id=checkpoint_id
+            )
+
+            if success:
+                print(f"Deployed task {task_id} to {task_manager_id} via gRPC")
+            else:
+                print(f"Failed to deploy task {task_id}: {message}")
+
+            return success, message
+
+        except Exception as e:
+            return False, f"gRPC deployment error: {str(e)}"
+
     def register_failure_callback(self, callback: callable):
         """
         Register a callback for TaskManager failures.
@@ -302,11 +370,19 @@ class ResourceManager:
                 1 for info in self.task_managers.values()
                 if info.status == TaskManagerStatus.ACTIVE
             )
+            
+            # Calculate inline to avoid deadlock (don't call methods that also acquire lock)
+            total_slots = sum(info.task_slots for info in self.task_managers.values())
+            available_slots = sum(
+                info.available_slots
+                for info in self.task_managers.values()
+                if info.is_healthy(self.heartbeat_timeout_ms)
+            )
 
             return {
                 'total_task_managers': len(self.task_managers),
                 'active_task_managers': active_count,
-                'total_slots': self.get_total_slots(),
-                'available_slots': self.get_available_slots(),
-                'utilization': 1.0 - (self.get_available_slots() / max(self.get_total_slots(), 1)),
+                'total_slots': total_slots,
+                'available_slots': available_slots,
+                'utilization': 1.0 - (available_slots / max(total_slots, 1)),
             }

@@ -1,0 +1,82 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stream-processing-network-policy
+  namespace: stream-processing
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow JobManager to receive traffic
+  - from:
+    - namespaceSelector: {}
+    - podSelector:
+        matchLabels:
+          app: jobmanager
+    ports:
+    - protocol: TCP
+      port: 8081
+    - protocol: TCP
+      port: 6123
+  # Allow TaskManager to receive traffic from JobManager
+  - from:
+    - podSelector:
+        matchLabels:
+          app: jobmanager
+    ports:
+    - protocol: TCP
+      port: 6124
+  # Allow Prometheus to scrape metrics
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 9090
+  # Allow GUI to access JobManager
+  - from:
+    - podSelector:
+        matchLabels:
+          app: gui
+    ports:
+    - protocol: TCP
+      port: 8081
+  egress:
+  # Allow all egress (can be restricted further)
+  - {}
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow PostgreSQL access
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow Kafka access
+  - to:
+    - podSelector:
+        matchLabels:
+          app: kafka
+    ports:
+    - protocol: TCP
+      port: 9092
+  # Allow GUI to access JobManager API
+  - to:
+    - podSelector:
+        matchLabels:
+          app: jobmanager
+    ports:
+    - protocol: TCP
+      port: 8081
+

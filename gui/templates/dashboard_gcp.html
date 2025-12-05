@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Processing Platform</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-red: #f85149;
+            --accent-orange: #d29922;
+            --accent-purple: #a371f7;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 1.4em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-red);
+        }
+
+        .status-dot.connected {
+            background: var(--accent-green);
+        }
+
+        /* Grid Layout */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .grid-wide {
+            grid-column: 1 / -1;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-title {
+            font-size: 1em;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .card-subtitle {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        /* Metrics */
+        .metric-value {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: var(--accent-blue);
+            line-height: 1.2;
+        }
+
+        .metric-label {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #4c9aed;
+        }
+
+        .btn-primary:disabled {
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        .btn-success {
+            background: var(--accent-green);
+            color: #fff;
+        }
+
+        .btn-danger {
+            background: var(--accent-red);
+            color: #fff;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.85em;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.9em;
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Operation Selector */
+        .operation-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .operation-option {
+            padding: 12px;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .operation-option:hover {
+            border-color: var(--accent-blue);
+        }
+
+        .operation-option.selected {
+            border-color: var(--accent-blue);
+            background: rgba(88, 166, 255, 0.1);
+        }
+
+        .operation-option input {
+            display: none;
+        }
+
+        .operation-name {
+            font-weight: 600;
+            font-size: 0.9em;
+            margin-bottom: 4px;
+        }
+
+        .operation-desc {
+            font-size: 0.75em;
+            color: var(--text-secondary);
+        }
+
+        /* Parameter Sections */
+        .params-section {
+            display: none;
+            padding: 16px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+
+        .params-section.active {
+            display: block;
+        }
+
+        .params-title {
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-secondary);
+        }
+
+        .params-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .params-row .form-input,
+        .params-row .form-select {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        /* Output Section */
+        .output-container {
+            max-height: 400px;
+            overflow-y: auto;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+        }
+
+        .output-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.85em;
+        }
+
+        .output-item:last-child {
+            border-bottom: none;
+        }
+
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .output-source {
+            color: var(--accent-purple);
+            font-weight: 500;
+        }
+
+        .output-time {
+            color: var(--text-muted);
+        }
+
+        .output-data {
+            background: var(--bg-primary);
+            padding: 8px 12px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .output-anomaly {
+            border-left: 3px solid var(--accent-red);
+        }
+
+        .output-normal {
+            border-left: 3px solid var(--accent-green);
+        }
+
+        /* Status Messages */
+        .status-message {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-top: 16px;
+            font-size: 0.9em;
+        }
+
+        .status-info {
+            background: rgba(88, 166, 255, 0.1);
+            border: 1px solid var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .status-success {
+            background: rgba(63, 185, 80, 0.1);
+            border: 1px solid var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .status-error {
+            background: rgba(248, 81, 73, 0.1);
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        /* Demo Section */
+        .demo-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .demo-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .demo-stat {
+            text-align: center;
+            padding: 12px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+        }
+
+        .demo-stat-value {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+
+        .demo-stat-label {
+            font-size: 0.75em;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Events Stream */
+        .events-container {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .event-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            margin-bottom: 6px;
+            font-size: 0.85em;
+        }
+
+        .event-item.anomaly {
+            border-left: 3px solid var(--accent-red);
+        }
+
+        .event-sensor {
+            font-weight: 600;
+            color: var(--accent-blue);
+        }
+
+        .event-temp {
+            color: var(--text-primary);
+        }
+
+        .event-condition {
+            color: var(--text-secondary);
+        }
+
+        .event-time {
+            color: var(--text-muted);
+            font-size: 0.8em;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            height: 6px;
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent-blue);
+            transition: width 0.3s;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 0.85em;
+            border-top: 1px solid var(--border-color);
+            margin-top: 24px;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .operation-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .demo-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <h1>Stream Processing Platform</h1>
+        <div class="connection-status">
+            <div class="status-dot" id="connectionIndicator"></div>
+            <span id="connectionText">Connecting...</span>
+        </div>
+    </header>
+
+    <div class="container">
+
+
+        <!-- Stream Processing Engine -->
+        <div class="grid">
+            <div class="card grid-wide">
+                <div class="card-header">
+                    <span class="card-title">Stream Processing Engine</span>
+                </div>
+                <p class="card-subtitle">Upload a CSV or JSON file and apply a processing operation. Data flows through
+                    Kafka and TaskManagers.</p>
+
+                <div class="form-group">
+                    <label class="form-label">Upload Data File</label>
+                    <input type="file" id="dataFile" accept=".csv,.json" class="form-input"
+                        onchange="parseFileColumns()">
+                    <div id="columnsInfo" style="margin-top: 8px; font-size: 0.85em; color: var(--text-secondary);">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Select Operation</label>
+                    <div class="operation-grid">
+                        <label class="operation-option" onclick="selectOperation('filter')">
+                            <input type="radio" name="operation" value="filter">
+                            <div class="operation-name">Filter</div>
+                            <div class="operation-desc">Keep matching rows</div>
+                        </label>
+                        <label class="operation-option" onclick="selectOperation('transform')">
+                            <input type="radio" name="operation" value="transform">
+                            <div class="operation-name">Transform</div>
+                            <div class="operation-desc">Modify data</div>
+                        </label>
+                        <label class="operation-option" onclick="selectOperation('aggregate')">
+                            <input type="radio" name="operation" value="aggregate">
+                            <div class="operation-name">Aggregate</div>
+                            <div class="operation-desc">Count / Sum / Avg</div>
+                        </label>
+                        <label class="operation-option" onclick="selectOperation('anomaly')">
+                            <input type="radio" name="operation" value="anomaly">
+                            <div class="operation-name">Anomaly</div>
+                            <div class="operation-desc">Detect outliers</div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Filter Parameters -->
+                <div id="filterParams" class="params-section">
+                    <div class="params-title">Filter Parameters</div>
+                    <div class="params-row">
+                        <select id="filterColumn" class="form-select">
+                            <option value="">Select column...</option>
+                        </select>
+                        <select id="filterOperator" class="form-select">
+                            <option value="equals">Equals</option>
+                            <option value="contains">Contains</option>
+                            <option value="greater_than">Greater Than</option>
+                            <option value="less_than">Less Than</option>
+                        </select>
+                        <input type="text" id="filterValue" placeholder="Value" class="form-input">
+                    </div>
+                </div>
+
+                <!-- Transform Parameters -->
+                <div id="transformParams" class="params-section">
+                    <div class="params-title">Transform Operation</div>
+                    <p style="color: var(--text-secondary); font-size: 0.85em;">Converts all text to uppercase and adds
+                        processing metadata.</p>
+                </div>
+
+                <!-- Aggregate Parameters -->
+                <div id="aggregateParams" class="params-section">
+                    <div class="params-title">Aggregate Parameters</div>
+                    <div class="params-row">
+                        <select id="aggregateFunc" class="form-select">
+                            <option value="count">Count</option>
+                            <option value="sum">Sum</option>
+                            <option value="avg">Average</option>
+                        </select>
+                        <select id="aggregateColumn" class="form-select">
+                            <option value="">Value column...</option>
+                        </select>
+                        <select id="groupBy" class="form-select">
+                            <option value="">Group by (optional)...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Anomaly Parameters -->
+                <div id="anomalyParams" class="params-section">
+                    <div class="params-title">Anomaly Detection Parameters</div>
+                    <div class="params-row">
+                        <select id="anomalyColumn" class="form-select">
+                            <option value="">Column to check...</option>
+                        </select>
+                        <input type="number" id="anomalyThreshold" placeholder="Threshold" value="100"
+                            class="form-input">
+                        <span style="padding: 10px; color: var(--text-secondary);">Flag if value &gt; threshold</span>
+                    </div>
+                </div>
+
+                <button onclick="processDataFile()" id="processBtn" class="btn btn-primary">
+                    Process with Stream Engine
+                </button>
+
+                <div id="submitStatus" class="status-message" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Output Results -->
+        <div class="grid">
+            <div class="card grid-wide">
+                <div class="card-header">
+                    <span class="card-title">Processing Results</span>
+                    <button onclick="clearOutput()" class="btn btn-secondary"
+                        style="padding: 6px 12px; font-size: 0.8em;">Clear</button>
+                </div>
+                <div class="output-container" id="outputContainer">
+                    <div class="empty-state">
+                        Waiting for data. Upload a file and process it to see results.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Demo Mode -->
+        <div class="grid">
+            <div class="card grid-wide">
+                <div class="card-header">
+                    <span class="card-title">Demo Mode - Live Weather Data</span>
+                </div>
+                <p class="card-subtitle">Stream real-time weather data from Open-Meteo API to demonstrate continuous
+                    processing.</p>
+
+                <div class="demo-controls">
+                    <button onclick="startDemo()" id="startDemoBtn" class="btn btn-success">Start Demo</button>
+                    <button onclick="stopDemo()" id="stopDemoBtn" class="btn btn-danger" style="display: none;">Stop
+                        Demo</button>
+                    <span id="demoStatus" style="color: var(--text-secondary);"></span>
+                </div>
+
+                <div id="demoStatsSection" style="display: none;">
+                    <div class="demo-stats">
+                        <div class="demo-stat">
+                            <div class="demo-stat-value" id="demoTotalEvents">0</div>
+                            <div class="demo-stat-label">Events Processed</div>
+                        </div>
+                        <div class="demo-stat">
+                            <div class="demo-stat-value" id="demoAnomalies">0</div>
+                            <div class="demo-stat-label">Anomalies Detected</div>
+                        </div>
+                        <div class="demo-stat">
+                            <div class="demo-stat-value" id="demoThroughput">0</div>
+                            <div class="demo-stat-label">Events/sec</div>
+                        </div>
+                        <div class="demo-stat">
+                            <div class="demo-stat-value" id="demoCheckpoints">0</div>
+                            <div class="demo-stat-label">Checkpoints</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="eventsSection" style="display: none; margin-top: 20px;">
+                    <div class="events-container" id="eventsList"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fault Tolerance Section -->
+        <div class="grid">
+            <div class="card grid-wide">
+                <div class="card-header">
+                    <span class="card-title">Fault Tolerance - Checkpoints and Recovery</span>
+                    <button onclick="refreshCheckpoints()" class="btn btn-secondary"
+                        style="padding: 6px 12px; font-size: 0.8em;">Refresh</button>
+                </div>
+                <p class="card-subtitle">Chandy-Lamport distributed snapshots stored in S3/GCS. Recover failed jobs from
+                    any checkpoint.</p>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <!-- Checkpoints List -->
+                    <div>
+                        <div class="params-title" style="margin-bottom: 12px;">Available Checkpoints</div>
+                        <div id="checkpointsList" class="output-container" style="max-height: 200px;">
+                            <div class="empty-state">No checkpoints yet. Run a job to create checkpoints.</div>
+                        </div>
+                    </div>
+
+                    <!-- Recovery Controls -->
+                    <div>
+                        <div class="params-title" style="margin-bottom: 12px;">Job Recovery</div>
+                        <div class="form-group">
+                            <label class="form-label">Select Job</label>
+                            <select id="recoveryJobSelect" class="form-select" onchange="loadJobCheckpoints()">
+                                <option value="">Select a job...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Checkpoint</label>
+                            <select id="recoveryCheckpointSelect" class="form-select">
+                                <option value="">Use latest checkpoint</option>
+                            </select>
+                        </div>
+                        <button onclick="recoverJob()" class="btn btn-primary" id="recoverBtn">
+                            Recover from Checkpoint
+                        </button>
+                        <div id="recoveryStatus" class="status-message" style="display: none; margin-top: 12px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            Stream Processing Platform v1.0 | Distributed Fault-Tolerant Engine | JobManager: <span
+                id="jobmanagerUrl">{{ jobmanager_url }}</span>
+        </footer>
+    </div>
+
+    <script>
+        const socket = io();
+        let selectedOperation = null;
+        let fileColumns = [];
+
+        // Parse file columns when file is selected
+        function parseFileColumns() {
+            const fileInput = document.getElementById('dataFile');
+            const columnsInfo = document.getElementById('columnsInfo');
+
+            if (!fileInput.files || !fileInput.files[0]) {
+                columnsInfo.textContent = '';
+                fileColumns = [];
+                updateColumnDropdowns();
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function (e) {
+                const content = e.target.result;
+                let columns = [];
+
+                if (file.name.endsWith('.csv')) {
+                    // Parse CSV header
+                    const firstLine = content.split('\n')[0];
+                    columns = firstLine.split(',').map(col => col.trim().replace(/"/g, ''));
+                } else if (file.name.endsWith('.json')) {
+                    // Parse JSON and get keys from first object
+                    try {
+                        const data = JSON.parse(content);
+                        const firstRecord = Array.isArray(data) ? data[0] : (data.data ? data.data[0] : data);
+                        if (firstRecord && typeof firstRecord === 'object') {
+                            columns = Object.keys(firstRecord);
+                        }
+                    } catch (err) {
+                        console.error('Error parsing JSON:', err);
+                    }
+                }
+
+                fileColumns = columns;
+                columnsInfo.textContent = 'Columns: ' + columns.join(', ');
+                updateColumnDropdowns();
+            };
+
+            // Read only first 10KB to get header
+            reader.readAsText(file.slice(0, 10240));
+        }
+
+        function updateColumnDropdowns() {
+            const dropdowns = [
+                { id: 'filterColumn', placeholder: 'Select column...' },
+                { id: 'aggregateColumn', placeholder: 'Value column...' },
+                { id: 'groupBy', placeholder: 'Group by (optional)...' },
+                { id: 'anomalyColumn', placeholder: 'Column to check...' }
+            ];
+
+            dropdowns.forEach(dropdown => {
+                const select = document.getElementById(dropdown.id);
+                if (!select) return;
+
+                // Clear existing options
+                select.innerHTML = '<option value="">' + dropdown.placeholder + '</option>';
+
+                // Add column options
+                fileColumns.forEach(col => {
+                    const option = document.createElement('option');
+                    option.value = col;
+                    option.textContent = col;
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        // Connection handling
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('connected', (data) => {
+            updateConnectionStatus(data.connected);
+        });
+
+
+
+        socket.on('job_output', (data) => {
+            displayOutput(data);
+        });
+
+        socket.on('new_event', (event) => {
+            displayEvent(event);
+        });
+
+        socket.on('demo_stats_update', (stats) => {
+            updateDemoStats(stats);
+        });
+
+        socket.on('checkpoint_complete', (checkpoint) => {
+            console.log('Checkpoint complete:', checkpoint);
+        });
+
+        socket.on('demo_stopped', () => {
+            document.getElementById('startDemoBtn').style.display = 'inline-block';
+            document.getElementById('stopDemoBtn').style.display = 'none';
+            document.getElementById('demoStatus').textContent = 'Demo stopped';
+        });
+
+        function updateConnectionStatus(isConnected) {
+            const indicator = document.getElementById('connectionIndicator');
+            const text = document.getElementById('connectionText');
+
+            if (isConnected) {
+                indicator.classList.add('connected');
+                text.textContent = 'Connected to JobManager';
+            } else {
+                indicator.classList.remove('connected');
+                text.textContent = 'Disconnected';
+            }
+        }
+
+
+
+        function selectOperation(operation) {
+            selectedOperation = operation;
+
+            // Update UI
+            document.querySelectorAll('.operation-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+
+            // Select radio
+            document.querySelector(`input[value="${operation}"]`).checked = true;
+
+            // Show params
+            document.querySelectorAll('.params-section').forEach(s => s.classList.remove('active'));
+            const paramSection = document.getElementById(operation + 'Params');
+            if (paramSection) {
+                paramSection.classList.add('active');
+            }
+        }
+
+        async function processDataFile() {
+            const fileInput = document.getElementById('dataFile');
+            const processBtn = document.getElementById('processBtn');
+
+            if (!fileInput.files || !fileInput.files[0]) {
+                showStatus('Please select a file', 'error');
+                return;
+            }
+
+            if (!selectedOperation) {
+                showStatus('Please select an operation', 'error');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            processBtn.disabled = true;
+            processBtn.textContent = 'Processing...';
+            showStatus('Processing ' + file.name + ' with ' + selectedOperation.toUpperCase() + ' operation...', 'info');
+
+            try {
+                const formData = new FormData();
+                formData.append('data_file', file);
+                formData.append('operation', selectedOperation);
+
+                if (selectedOperation === 'filter') {
+                    formData.append('filter_column', document.getElementById('filterColumn').value);
+                    formData.append('filter_operator', document.getElementById('filterOperator').value);
+                    formData.append('filter_value', document.getElementById('filterValue').value);
+                } else if (selectedOperation === 'aggregate') {
+                    formData.append('aggregate_func', document.getElementById('aggregateFunc').value);
+                    formData.append('aggregate_column', document.getElementById('aggregateColumn').value);
+                    formData.append('group_by', document.getElementById('groupBy').value);
+                } else if (selectedOperation === 'anomaly') {
+                    formData.append('anomaly_column', document.getElementById('anomalyColumn').value);
+                    formData.append('anomaly_threshold', document.getElementById('anomalyThreshold').value);
+                }
+
+                const response = await fetch('/api/data/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showStatus('Processed ' + result.records_input + ' records with ' + result.operation.toUpperCase() + ' - ' + result.records_output + ' results', 'success');
+                    fileInput.value = '';
+                } else {
+                    showStatus('Error: ' + (result.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                showStatus('Failed: ' + error.message, 'error');
+            }
+
+            processBtn.disabled = false;
+            processBtn.textContent = 'Process with Stream Engine';
+        }
+
+        function displayOutput(output) {
+            const container = document.getElementById('outputContainer');
+
+            // Clear empty state
+            if (container.querySelector('.empty-state')) {
+                container.innerHTML = '';
+            }
+
+            const item = document.createElement('div');
+            item.className = 'output-item';
+
+            if (output.data && output.data.is_anomaly) {
+                item.classList.add('output-anomaly');
+            } else if (output.data && output.data.operation === 'anomaly') {
+                item.classList.add('output-normal');
+            }
+
+            const dataStr = typeof output.data === 'object' ? JSON.stringify(output.data, null, 2) : output.data;
+
+            item.innerHTML = `
+                <div class="output-header">
+                    <span class="output-source">${output.source || 'stream-processing'}</span>
+                    <span class="output-time">${output.timestamp || ''}</span>
+                </div>
+                <div class="output-data">${dataStr}</div>
+            `;
+
+            container.insertBefore(item, container.firstChild);
+
+            // Keep max 50 items
+            while (container.children.length > 50) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        function clearOutput() {
+            document.getElementById('outputContainer').innerHTML = '<div class="empty-state">Waiting for data. Upload a file and process it to see results.</div>';
+        }
+
+        async function startDemo() {
+            try {
+                const response = await fetch('/api/demo/start', { method: 'POST' });
+                const result = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('startDemoBtn').style.display = 'none';
+                    document.getElementById('stopDemoBtn').style.display = 'inline-block';
+                    document.getElementById('demoStatsSection').style.display = 'block';
+                    document.getElementById('eventsSection').style.display = 'block';
+                    document.getElementById('demoStatus').textContent = 'Running...';
+                }
+            } catch (error) {
+                console.error('Failed to start demo:', error);
+            }
+        }
+
+        async function stopDemo() {
+            try {
+                await fetch('/api/demo/stop', { method: 'POST' });
+            } catch (error) {
+                console.error('Failed to stop demo:', error);
+            }
+        }
+
+        function updateDemoStats(stats) {
+            document.getElementById('demoTotalEvents').textContent = stats.total_events || 0;
+            document.getElementById('demoAnomalies').textContent = stats.anomalies || 0;
+            document.getElementById('demoThroughput').textContent = stats.throughput || 0;
+            document.getElementById('demoCheckpoints').textContent = stats.checkpoints || 0;
+        }
+
+        function displayEvent(event) {
+            const container = document.getElementById('eventsList');
+
+            const item = document.createElement('div');
+            item.className = 'event-item' + (event.is_anomaly ? ' anomaly' : '');
+
+            item.innerHTML = `
+                <div>
+                    <span class="event-sensor">${event.sensor_id}</span>
+                    <span class="event-temp">${event.temperature}C</span>
+                    <span class="event-condition">${event.condition}</span>
+                </div>
+                <span class="event-time">${event.timestamp}</span>
+            `;
+
+            container.insertBefore(item, container.firstChild);
+
+            while (container.children.length > 30) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('submitStatus');
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = message;
+            statusDiv.className = 'status-message status-' + type;
+        }
+
+        // Fault Tolerance Functions
+        async function refreshCheckpoints() {
+            try {
+                // Load jobs first
+                const jobsResponse = await fetch('/api/jobs');
+                const responseData = await jobsResponse.json();
+                const jobs = responseData.jobs || responseData;
+
+                const jobSelect = document.getElementById('recoveryJobSelect');
+                jobSelect.innerHTML = '<option value="">Select a job...</option>';
+
+                if (Array.isArray(jobs)) {
+                    jobs.forEach(job => {
+                        const option = document.createElement('option');
+                        option.value = job.job_id;
+                        option.textContent = job.job_name + ' (' + job.status + ')';
+                        jobSelect.appendChild(option);
+                    });
+                }
+
+                // Clear checkpoints list
+                document.getElementById('checkpointsList').innerHTML = '<div class="empty-state">Select a job to view checkpoints</div>';
+
+            } catch (error) {
+                console.error('Failed to refresh:', error);
+            }
+        }
+
+        async function loadJobCheckpoints() {
+            const jobId = document.getElementById('recoveryJobSelect').value;
+            if (!jobId) return;
+
+            try {
+                const response = await fetch('/api/jobs/' + jobId + '/checkpoints');
+                const data = await response.json();
+
+                const container = document.getElementById('checkpointsList');
+                const checkpointSelect = document.getElementById('recoveryCheckpointSelect');
+
+                checkpointSelect.innerHTML = '<option value="">Use latest checkpoint</option>';
+
+                if (data.checkpoints && data.checkpoints.length > 0) {
+                    container.innerHTML = '';
+
+                    data.checkpoints.forEach(chk => {
+                        // Add to list
+                        const item = document.createElement('div');
+                        item.className = 'output-item';
+                        item.innerHTML = `
+                            <div class="output-header">
+                                <span class="output-source">Checkpoint ${chk.checkpoint_id}</span>
+                                <span class="output-time">${new Date(chk.timestamp).toLocaleString()}</span>
+                            </div>
+                            <div class="output-data">${chk.task_count} tasks | ${chk.status} | ${chk.storage_path}</div>
+                        `;
+                        container.appendChild(item);
+
+                        // Add to select
+                        const option = document.createElement('option');
+                        option.value = chk.checkpoint_id;
+                        option.textContent = 'Checkpoint ' + chk.checkpoint_id + ' - ' + new Date(chk.timestamp).toLocaleString();
+                        checkpointSelect.appendChild(option);
+                    });
+                } else {
+                    container.innerHTML = '<div class="empty-state">No checkpoints for this job</div>';
+                }
+            } catch (error) {
+                console.error('Failed to load checkpoints:', error);
+            }
+        }
+
+        async function recoverJob() {
+            const jobId = document.getElementById('recoveryJobSelect').value;
+            const checkpointId = document.getElementById('recoveryCheckpointSelect').value;
+            const statusDiv = document.getElementById('recoveryStatus');
+            const btn = document.getElementById('recoverBtn');
+
+            if (!jobId) {
+                statusDiv.style.display = 'block';
+                statusDiv.className = 'status-message status-error';
+                statusDiv.textContent = 'Please select a job';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Recovering...';
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'status-message status-info';
+            statusDiv.textContent = 'Initiating recovery...';
+
+            try {
+                const body = checkpointId ? { checkpoint_id: parseInt(checkpointId) } : {};
+
+                const response = await fetch('/api/jobs/' + jobId + '/recover', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    statusDiv.className = 'status-message status-success';
+                    statusDiv.textContent = 'Recovered! ' + result.message;
+                    refreshCheckpoints();
+                } else {
+                    statusDiv.className = 'status-message status-error';
+                    statusDiv.textContent = 'Error: ' + (result.detail || 'Unknown error');
+                }
+            } catch (error) {
+                statusDiv.className = 'status-message status-error';
+                statusDiv.textContent = 'Failed: ' + error.message;
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Recover from Checkpoint';
+        }
+
+        // Load jobs on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            refreshCheckpoints();
+        });
+    </script>
+</body>
+
+</html>

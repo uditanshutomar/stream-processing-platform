@@ -1,0 +1,193 @@
+# Alternative StatefulSet deployment for TaskManagers with persistent storage
+# Use this instead of DaemonSet if you need persistent state across pod restarts
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: taskmanager
+  namespace: stream-processing
+  labels:
+    app: taskmanager
+spec:
+  serviceName: taskmanager
+  replicas: 3
+  selector:
+    matchLabels:
+      app: taskmanager
+  template:
+    metadata:
+      labels:
+        app: taskmanager
+    spec:
+      serviceAccountName: stream-processing-sa
+      containers:
+      - name: taskmanager
+        image: gcr.io/PROJECT_ID/stream-processing-taskmanager:latest
+        # Replace PROJECT_ID with your GCP project ID
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 6124
+          name: grpc
+        - containerPort: 9090
+          name: metrics
+        env:
+        - name: TASK_MANAGER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: JOBMANAGER_HOST
+          value: jobmanager
+        - name: JOBMANAGER_PORT
+          value: "6123"
+        - name: TASKMANAGER_RPC_PORT
+          value: "6124"
+        - name: TASK_SLOTS
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: TASK_SLOTS
+        - name: MEMORY_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: MEMORY_SIZE
+        - name: STATE_BACKEND
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: STATE_BACKEND
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: kafka:9092
+        - name: HEARTBEAT_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: HEARTBEAT_INTERVAL
+        - name: HEARTBEAT_TIMEOUT
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: HEARTBEAT_TIMEOUT
+        - name: BUFFER_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: BUFFER_SIZE
+        - name: BUFFER_POOL_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: BUFFER_POOL_SIZE
+        - name: CREDIT_INITIAL
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: CREDIT_INITIAL
+        - name: ROCKSDB_WRITE_BUFFER_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: ROCKSDB_WRITE_BUFFER_SIZE
+        - name: ROCKSDB_MAX_WRITE_BUFFERS
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: ROCKSDB_MAX_WRITE_BUFFERS
+        - name: ROCKSDB_BLOCK_CACHE_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: ROCKSDB_BLOCK_CACHE_SIZE
+        - name: METRICS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: METRICS_PORT
+        # GCS Configuration (for GCP)
+        - name: STORAGE_BACKEND
+          value: "gcs"
+        - name: GCS_CHECKPOINT_PATH
+          value: "gs://YOUR_BUCKET_NAME/checkpoints"
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/var/secrets/google/key.json"
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+        volumeMounts:
+        - name: rocksdb-state
+          mountPath: /data/rocksdb
+        - name: gcp-key
+          mountPath: /var/secrets/google
+          readOnly: true
+        startupProbe:
+          tcpSocket:
+            port: 6124
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 12
+          timeoutSeconds: 3
+        livenessProbe:
+          tcpSocket:
+            port: 6124
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 6124
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: gcp-key
+        secret:
+          secretName: gcp-service-account-key
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - taskmanager
+              topologyKey: kubernetes.io/hostname
+  volumeClaimTemplates:
+  - metadata:
+      name: rocksdb-state
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: standard-rwo
+      resources:
+        requests:
+          storage: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskmanager
+  namespace: stream-processing
+  labels:
+    app: taskmanager
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet
+  ports:
+  - port: 6124
+    targetPort: 6124
+    protocol: TCP
+    name: grpc
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: metrics
+  selector:
+    app: taskmanager
+

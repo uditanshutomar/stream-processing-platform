@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stream-processing-config
+  namespace: stream-processing
+data:
+  # JobManager Configuration
+  JOBMANAGER_HOST: "jobmanager"
+  JOBMANAGER_REST_PORT: "8081"
+  JOBMANAGER_RPC_PORT: "6123"
+  
+  # Checkpoint Configuration
+  CHECKPOINT_INTERVAL: "10000"
+  CHECKPOINT_TIMEOUT: "60000"
+  STATE_BACKEND: "rocksdb"
+  
+  # TaskManager Configuration
+  TASK_SLOTS: "4"
+  MEMORY_SIZE: "2048"
+  
+  # Heartbeat Configuration
+  HEARTBEAT_INTERVAL: "5000"
+  HEARTBEAT_TIMEOUT: "15000"
+  
+  # Network Configuration
+  BUFFER_SIZE: "32768"
+  BUFFER_POOL_SIZE: "2048"
+  CREDIT_INITIAL: "1024"
+  
+  # RocksDB Configuration
+  ROCKSDB_WRITE_BUFFER_SIZE: "67108864"
+  ROCKSDB_MAX_WRITE_BUFFERS: "3"
+  ROCKSDB_BLOCK_CACHE_SIZE: "268435456"
+  
+  # Metrics Configuration
+  METRICS_PORT: "9090"
+

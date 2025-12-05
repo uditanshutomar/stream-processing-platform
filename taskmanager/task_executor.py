@@ -18,9 +18,10 @@ from common.config import Config
 from common.serialization import StreamRecord
 from common.watermarks import Watermark
 
-# Import generated proto files (will be generated)
-# from common.protobuf import stream_processing_pb2
-# from common.protobuf import stream_processing_pb2_grpc
+# Import generated proto files
+from common.protobuf import stream_processing_pb2
+from common.protobuf import stream_processing_pb2_grpc
+from taskmanager.grpc_service import TaskManagerServiceImpl
 
 from taskmanager.operators.base import StreamOperator, OperatorChain
 from taskmanager.state.rocksdb_backend import RocksDBStateBackend, InMemoryStateBackend
@@ -76,6 +77,71 @@ class Task:
 
             self.running = True
             self.operator.open()
+            
+            # Start execution thread
+            self.thread = threading.Thread(target=self.run, daemon=True)
+            self.thread.start()
+
+    def run(self):
+        """Main execution loop"""
+        try:
+            # Check if we have a source operator
+            source_operator = None
+            is_chain = isinstance(self.operator, OperatorChain)
+            
+            if is_chain:
+                if hasattr(self.operator.operators[0], 'read_records'):
+                    source_operator = self.operator.operators[0]
+            elif hasattr(self.operator, 'read_records'):
+                source_operator = self.operator
+
+            # If source, run poll loop
+            if source_operator:
+                print(f"Task {self.task_id} starting source loop")
+                while self.running:
+                    # Read records
+                    records = source_operator.read_records()
+                    
+                    for record_tuple in records:
+                        # record_tuple is (record, partition, offset)
+                        record = record_tuple[0]
+                        
+                        # Process through remaining operators
+                        if is_chain:
+                            # Skip source (first operator)
+                            current_records = [record]
+                            for op in self.operator.operators[1:]:
+                                next_records = []
+                                for r in current_records:
+                                    next_records.extend(op.process_element(r))
+                                current_records = next_records
+                                
+                                # Record metrics for this operator
+                                # Note: This is simplified, ideally we record for each op
+                        else:
+                            # Single source, just emit to downstream
+                            # TODO: Implement network emission
+                            pass
+                            
+                        # Update metrics
+                        self.metrics.record_processed()
+                    
+                    # Sleep briefly to avoid busy loop if no records
+                    if not records:
+                        time.sleep(0.01)
+                        
+            else:
+                # Downstream task - wait for input
+                # In a real system, this would listen on a queue/socket
+                print(f"Task {self.task_id} waiting for input (push-based)")
+                while self.running:
+                    time.sleep(1)
+
+        except Exception as e:
+            print(f"Task {self.task_id} failed: {e}")
+            import traceback
+            traceback.print_exc()
+            self.running = False
 
     def stop(self):
         """Stop task execution"""
@@ -281,13 +347,15 @@ class TaskExecutor:
             futures.ThreadPoolExecutor(max_workers=self.task_slots * 2)
         )
 
-        # Register service (would use generated proto code)
-        # stream_processing_pb2_grpc.add_TaskManagerServiceServicer_to_server(
-        #     TaskManagerServiceImpl(self), self.grpc_server
-        # )
+        # Register TaskManager gRPC service
+        service_impl = TaskManagerServiceImpl(self)
+        stream_processing_pb2_grpc.add_TaskManagerServiceServicer_to_server(
+            service_impl, self.grpc_server
+        )
 
         self.grpc_server.add_insecure_port(f'[::]:{self.rpc_port}')
         self.grpc_server.start()
+        print(f"gRPC server started on port {self.rpc_port}")
 
     def deploy_task(
         self,
@@ -411,7 +479,7 @@ class TaskExecutor:
 
     def _load_checkpoint(self, checkpoint_path: str, task_id: str) -> Optional[bytes]:
         """
-        Load checkpoint data from storage (S3 or local).
+        Load checkpoint data from storage (S3, GCS, or local).
 
         Args:
             checkpoint_path: Path to checkpoint
@@ -420,19 +488,50 @@ class TaskExecutor:
         Returns:
             Checkpoint data or None
         """
-        try:
-            # Try S3 first if boto3 is available
-            if boto3:
-                s3_client = boto3.client('s3')
-                bucket = Config.get_s3_bucket()
-                key = f"{checkpoint_path}/{task_id}/state"
+        storage_backend = Config.STORAGE_BACKEND.lower()
+        
+        # Try GCS first if configured
+        if storage_backend == "gcs":
+            try:
+                from google.cloud import storage as gcs_storage
+                gcs_client = gcs_storage.Client()
+                bucket_name = Config.get_gcs_bucket()
+                bucket = gcs_client.bucket(bucket_name)
+                
+                # Parse checkpoint path to get blob name
+                # checkpoint_path format: gs://bucket/prefix/job-{job_id}/chk-{checkpoint_id}/tm-{task_manager_id}
+                # We need: prefix/job-{job_id}/chk-{checkpoint_id}/tm-{task_manager_id}/{task_id}.bin
+                if checkpoint_path.startswith('gs://'):
+                    checkpoint_path = checkpoint_path[5:]
+                if checkpoint_path.startswith(bucket_name + '/'):
+                    checkpoint_path = checkpoint_path[len(bucket_name) + 1:]
+                
+                blob_name = f"{checkpoint_path}/{task_id}.bin"
+                blob = bucket.blob(blob_name)
+                
+                if blob.exists():
+                    checkpoint_data = blob.download_as_bytes()
+                    print(f"Loaded checkpoint for {task_id} from GCS: {len(checkpoint_data)} bytes")
+                    return checkpoint_data
+            except ImportError:
+                print("google-cloud-storage not available, trying other backends...")
+            except Exception as e:
+                print(f"Failed to load checkpoint from GCS: {e}, trying other storage...")
+        
+        # Try S3 if configured
+        if storage_backend == "s3":
+            try:
+                if boto3:
+                    s3_client = boto3.client('s3')
+                    bucket = Config.get_s3_bucket()
+                    key = f"{checkpoint_path}/{task_id}/state"
 
-                response = s3_client.get_object(Bucket=bucket, Key=key)
-                checkpoint_data = response['Body'].read()
-                print(f"Loaded checkpoint for {task_id} from S3: {len(checkpoint_data)} bytes")
-                return checkpoint_data
-        except Exception as e:
-            print(f"Failed to load checkpoint from S3: {e}, trying local storage...")
+                    response = s3_client.get_object(Bucket=bucket, Key=key)
+                    checkpoint_data = response['Body'].read()
+                    print(f"Loaded checkpoint for {task_id} from S3: {len(checkpoint_data)} bytes")
+                    return checkpoint_data
+            except Exception as e:
+                print(f"Failed to load checkpoint from S3: {e}, trying local storage...")
 
         # Fallback to local storage
         try:
@@ -459,36 +558,52 @@ class TaskExecutor:
             time.sleep(Config.HEARTBEAT_INTERVAL / 1000.0)
 
     def _send_heartbeat(self):
-        """Send heartbeat to JobManager"""
+        """Send heartbeat to JobManager via HTTP"""
+        import urllib.request
+        import json
+        
         with self.tasks_lock:
             available_slots = self.task_slots - len(self.tasks)
 
             # Collect metrics from all tasks
             task_metrics = []
             for task_id, task in self.tasks.items():
+                metrics = task.metrics.get_metrics_dict()
                 task_metrics.append({
                     'task_id': task_id,
                     'status': 'running',
-                    'records_processed': getattr(task, 'records_processed', 0)
+                    'records_processed': metrics['records_processed'],
+                    'processing_latency_ms': metrics['processing_latency_ms'],
+                    'backpressure_ratio': metrics['backpressure_ratio']
                 })
 
-        # Send heartbeat to ResourceManager (which manages TaskManagers)
-        # In a distributed setup, this would be gRPC/HTTP
-        # For now, we'll use a simple callback if resource_manager is available
+        # Build heartbeat payload
         heartbeat_data = {
             'task_manager_id': self.task_manager_id,
+            'host': os.environ.get('HOSTNAME', 'localhost'),
+            'port': self.rpc_port,
             'available_slots': available_slots,
             'total_slots': self.task_slots,
             'task_metrics': task_metrics,
             'timestamp': time.time() * 1000
         }
 
-        # If we have a resource_manager callback, use it
-        if hasattr(self, 'resource_manager_callback') and self.resource_manager_callback:
-            try:
-                self.resource_manager_callback(heartbeat_data)
-            except Exception as e:
-                print(f"Error sending heartbeat to ResourceManager: {e}")
+        # Send heartbeat to JobManager via HTTP
+        try:
+            url = f"http://{self.jobmanager_host}:{Config.JOBMANAGER_REST_PORT}/taskmanagers/heartbeat"
+            data = json.dumps(heartbeat_data).encode('utf-8')
+            req = urllib.request.Request(
+                url,
+                data=data,
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=5) as response:
+                if response.status == 200:
+                    pass  # Heartbeat successful
+        except Exception as e:
+            # Silently fail heartbeat - will retry on next interval
+            pass
 
     def get_metrics(self) -> dict:
         """

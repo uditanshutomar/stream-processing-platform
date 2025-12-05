@@ -1,0 +1,148 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jobmanager
+  namespace: stream-processing
+  labels:
+    app: jobmanager
+spec:
+  replicas: 2  # For high availability
+  selector:
+    matchLabels:
+      app: jobmanager
+  template:
+    metadata:
+      labels:
+        app: jobmanager
+    spec:
+      serviceAccountName: stream-processing-sa
+      containers:
+      - name: jobmanager
+        image: gcr.io/dcsc-project-479911/stream-processing-jobmanager:latest
+        # Replace dcsc-project-479911 with your GCP project ID
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8081
+          name: rest-api
+        - containerPort: 6123
+          name: grpc
+        env:
+        - name: JOBMANAGER_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: JOBMANAGER_HOST
+        - name: JOBMANAGER_REST_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: JOBMANAGER_REST_PORT
+        - name: JOBMANAGER_RPC_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: JOBMANAGER_RPC_PORT
+        - name: POSTGRES_HOST
+          value: postgres
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          value: stream_processing
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: kafka-broker:9092
+        - name: CHECKPOINT_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: CHECKPOINT_INTERVAL
+        - name: CHECKPOINT_TIMEOUT
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: CHECKPOINT_TIMEOUT
+        - name: STATE_BACKEND
+          valueFrom:
+            configMapKeyRef:
+              name: stream-processing-config
+              key: STATE_BACKEND
+        # GCS Configuration (for GCP)
+        - name: STORAGE_BACKEND
+          value: "gcs"  # Options: "s3", "gcs", "local"
+        - name: GCS_CHECKPOINT_PATH
+          value: "gs://stream-processing-checkpoints-1764590836/checkpoints"
+          # Replace stream-processing-checkpoints-1764590836 with your GCS bucket name
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/var/secrets/google/key.json"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "750m"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+        volumeMounts:
+        - name: gcp-key
+          mountPath: /var/secrets/google
+          readOnly: true
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 12
+          timeoutSeconds: 3
+        # livenessProbe removed for debugging
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 30
+          failureThreshold: 5
+      volumes:
+      - name: gcp-key
+        secret:
+          secretName: gcp-service-account-key
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - jobmanager
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jobmanager
+  namespace: stream-processing
+  labels:
+    app: jobmanager
+spec:
+  type: LoadBalancer  # Use LoadBalancer for external access, or ClusterIP for internal only
+  ports:
+  - port: 8081
+    targetPort: 8081
+    protocol: TCP
+    name: rest-api
+  - port: 6123
+    targetPort: 6123
+    protocol: TCP
+    name: grpc
+  selector:
+    app: jobmanager
+

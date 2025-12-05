@@ -23,12 +23,18 @@ class Config:
     CHECKPOINT_INTERVAL = int(os.getenv("CHECKPOINT_INTERVAL", "10000"))  # ms
     CHECKPOINT_TIMEOUT = int(os.getenv("CHECKPOINT_TIMEOUT", "60000"))  # ms
     STATE_BACKEND = os.getenv("STATE_BACKEND", "rocksdb")
+    STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "s3")  # Options: "s3", "gcs", "local"
     S3_CHECKPOINT_PATH = os.getenv("S3_CHECKPOINT_PATH", "s3://stream-processing/checkpoints")
+    GCS_CHECKPOINT_PATH = os.getenv("GCS_CHECKPOINT_PATH", "gs://stream-processing/checkpoints")
 
     # AWS Configuration
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
     AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+
+    # GCP Configuration
+    GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+    GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "")
 
     # PostgreSQL Configuration
     POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
@@ -86,3 +92,21 @@ class Config:
         for key, value in config_dict.items():
             if hasattr(cls, key):
                 setattr(cls, key, value)
+
+    @classmethod
+    def get_s3_bucket(cls) -> str:
+        """Extract S3 bucket name from S3_CHECKPOINT_PATH"""
+        s3_path = cls.S3_CHECKPOINT_PATH
+        if s3_path.startswith('s3://'):
+            s3_path = s3_path[5:]
+        bucket = s3_path.split('/', 1)[0]
+        return bucket
+
+    @classmethod
+    def get_gcs_bucket(cls) -> str:
+        """Extract GCS bucket name from GCS_CHECKPOINT_PATH"""
+        gcs_path = cls.GCS_CHECKPOINT_PATH
+        if gcs_path.startswith('gs://'):
+            gcs_path = gcs_path[5:]
+        bucket = gcs_path.split('/', 1)[0]
+        return bucket

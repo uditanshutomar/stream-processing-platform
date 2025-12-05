@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stream-processing
+  labels:
+    name: stream-processing
+
