@@ -5,7 +5,7 @@ A production-grade stream processing system inspired by Apache Flink, implementi
 ---
 # Team
 
-Uditanshu Tomar (Uditanshu.tomar@colorado.edu)
+Uditanshu Tomar (Uditanshu.tomar@colorado.edu), 
 Ishneet Chadha (Ishneet.chadha@colorado.edu)
 
 ## How to Run
