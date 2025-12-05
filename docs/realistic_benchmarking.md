@@ -14,7 +14,7 @@ The existing `scripts/benchmark.py` measures:
 - No distributed system overhead
 - **Result**: Inflated metrics (millions of records/second, sub-microsecond latency)
 
-### ✅ Realistic Benchmarks (End-to-End)
+### Realistic Benchmarks (End-to-End)
 The new `scripts/realistic_benchmark.py` measures:
 - **Kafka I/O**: Producer and consumer overhead (5-50ms typical)
 - **Network serialization**: Protobuf encoding/decoding

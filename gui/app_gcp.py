@@ -360,7 +360,7 @@ def process_data_file():
                         'value': value,
                         'threshold': threshold,
                         'is_anomaly': is_anomaly,
-                        'status': '🚨 ANOMALY' if is_anomaly else '✅ NORMAL',
+                        'status': 'ANOMALY' if is_anomaly else 'NORMAL',
                         'record': record
                     }
                 except Exception as e:

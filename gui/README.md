@@ -4,12 +4,12 @@ Modern, real-time monitoring dashboard for the stream processing platform.
 
 ## Features
 
-- ✅ **Real-time Event Monitoring** - See events as they're processed
-- ✅ **Live Metrics** - Throughput, anomaly detection, and more
-- ✅ **Checkpoint Tracking** - Monitor state snapshots
-- ✅ **Resource Management** - TaskManager status and utilization
-- ✅ **Anomaly Visualization** - Highlighted anomalous events
-- ✅ **WebSocket Updates** - No page refresh needed
+- **Real-time Event Monitoring** - See events as they're processed
+- **Live Metrics** - Throughput, anomaly detection, and more
+- **Checkpoint Tracking** - Monitor state snapshots
+- **Resource Management** - TaskManager status and utilization
+- **Anomaly Visualization** - Highlighted anomalous events
+- **WebSocket Updates** - No page refresh needed
 
 ## Quick Start
 
@@ -80,4 +80,4 @@ Click the "Start Processing" button to begin streaming data!
 
 ---
 
-**Your stream processing platform now has a beautiful, working GUI!** 🎉
+**Your stream processing platform now has a beautiful, working GUI!**

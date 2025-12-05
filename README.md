@@ -4,7 +4,7 @@ A production-grade stream processing system inspired by Apache Flink, implementi
 
 ---
 
-## 🚀 How to Run
+## How to Run
 
 ### Prerequisites
 *   **Docker** & **Docker Compose**
@@ -61,7 +61,7 @@ Deploy the platform to a Google Kubernetes Engine cluster.
 
 ---
 
-## 🏃 Running Jobs
+## Running Jobs
 
 ### 1. Run the Demo (GUI)
 1.  Go to the **Dashboard** ([http://localhost:5000](http://localhost:5000)).
@@ -90,7 +90,7 @@ curl http://localhost:8081/jobs/{job_id}/status
 
 ---
 
-## 🏗 Architecture
+## Architecture
 
 *   **JobManager (Master)**: Coordinates execution, manages resources, and handles checkpoints.
 *   **TaskManager (Worker)**: Executes tasks in parallel slots.
@@ -99,15 +99,15 @@ curl http://localhost:8081/jobs/{job_id}/status
 *   **RocksDB**: Embedded state backend for stateful operations.
 *   **GCS/S3**: Distributed storage for fault-tolerance checkpoints.
 
-## ✨ Features
+## Features
 
-*   ✅ **Exactly-Once Processing**: Distributed snapshots (Chandy-Lamport).
-*   ✅ **Fault Tolerance**: Automatic failure recovery.
-*   ✅ **High Throughput**: Operator chaining & flow control.
-*   ✅ **Stateful Operations**: Windowing, Aggregations, Joins.
-*   ✅ **Observability**: Prometheus metrics & Grafana dashboards.
+*   **Exactly-Once Processing**: Distributed snapshots (Chandy-Lamport).
+*   **Fault Tolerance**: Automatic failure recovery.
+*   **High Throughput**: Operator chaining & flow control.
+*   **Stateful Operations**: Windowing, Aggregations, Joins.
+*   **Observability**: Prometheus metrics & Grafana dashboards.
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 stream-processing-platform/
@@ -120,7 +120,7 @@ stream-processing-platform/
 └── scripts/                 # Deployment Scripts
 ```
 
-## 🛠 Configuration
+## Configuration
 
 Key environment variables in `deployment/docker-compose.yml`:
 
@@ -129,7 +129,7 @@ Key environment variables in `deployment/docker-compose.yml`:
 *   `STATE_BACKEND`: `rocksdb` or `memory`.
 *   `GCS_CHECKPOINT_PATH`: GCS bucket for checkpoints.
 
-## 📊 Monitoring
+## Monitoring
 
 *   **Grafana**: [http://localhost:3000](http://localhost:3000) (admin/admin)
 *   **Prometheus**: [http://localhost:9090](http://localhost:9090)

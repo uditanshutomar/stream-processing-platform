@@ -45,7 +45,7 @@ def process_sensor_reading(reading):
 
     if is_anomaly:
         stats["anomalies_detected"] += 1
-        print(f"🚨 ANOMALY DETECTED: Sensor {reading['sensor_id']} in {reading['location']}")
+        print(f"ANOMALY DETECTED: Sensor {reading['sensor_id']} in {reading['location']}")
         print(f"   Temperature: {reading['temperature']}°C, Humidity: {reading['humidity']}%")
 
     return {
@@ -59,7 +59,7 @@ def print_statistics():
     throughput = stats["total_readings"] / elapsed if elapsed > 0 else 0
 
     print("\n" + "="*80)
-    print("📊 STREAM PROCESSING STATISTICS")
+    print("STREAM PROCESSING STATISTICS")
     print("="*80)
     print(f"Runtime:              {elapsed:.1f} seconds")
     print(f"Total Readings:       {stats['total_readings']:,}")
@@ -71,7 +71,7 @@ def print_statistics():
 
 def main():
     print("="*80)
-    print("🚀 STREAM PROCESSING PLATFORM - REAL DATA TEST")
+    print("STREAM PROCESSING PLATFORM - REAL DATA TEST")
     print("="*80)
     print()
     print("Testing with IoT Sensor Data:")
@@ -84,7 +84,7 @@ def main():
     print()
 
     # Setup infrastructure
-    print("🔧 Setting up infrastructure...")
+    print("Setting up infrastructure...")
 
     # 1. Resource Manager
     resource_manager = ResourceManager(heartbeat_timeout_ms=30000)
@@ -99,7 +99,7 @@ def main():
             task_slots=4
         )
 
-    print(f"   ✓ Registered {len(resource_manager.get_all_task_managers())} TaskManagers")
+    print(f"   - Registered {len(resource_manager.get_all_task_managers())} TaskManagers")
 
     # 2. Checkpoint Coordinator
     coordinator = CheckpointCoordinator(
@@ -108,20 +108,20 @@ def main():
         checkpoint_timeout_ms=30000     # 30 second timeout
     )
     coordinator.start()
-    print("   ✓ Started Checkpoint Coordinator")
+    print("   - Started Checkpoint Coordinator")
 
     # 3. Task Scheduler
     scheduler = TaskScheduler(resource_manager)
-    print("   ✓ Initialized Task Scheduler")
+    print("   - Initialized Task Scheduler")
 
-    print("\n🌊 Starting data stream processing...\n")
+    print("\nStarting data stream processing...\n")
 
     # Simulate task IDs for checkpointing
     task_ids = ["task_sensor_reader", "task_anomaly_detector", "task_aggregator"]
 
     # Setup signal handler for graceful shutdown
     def signal_handler(sig, frame):
-        print("\n\n⏸️  Shutting down gracefully...")
+        print("\n\nShutting down gracefully...")
         coordinator.stop()
         resource_manager.stop()
         print_statistics()
@@ -166,7 +166,7 @@ def main():
                 latest = coordinator.get_latest_checkpoint()
                 if latest and latest.checkpoint_id == checkpoint_id:
                     stats["checkpoints_completed"] += 1
-                    print(f"✅ Checkpoint {checkpoint_id} completed "
+                    print(f"Checkpoint {checkpoint_id} completed "
                           f"({stats['total_readings']} readings processed)")
 
                 last_checkpoint_time = time.time()
@@ -175,14 +175,14 @@ def main():
             if stats["total_readings"] % 100 == 0:
                 elapsed = time.time() - stats["start_time"]
                 throughput = stats["total_readings"] / elapsed
-                print(f"📈 Processed {stats['total_readings']:,} readings "
+                print(f"Processed {stats['total_readings']:,} readings "
                       f"({throughput:.1f} readings/sec, "
                       f"{stats['anomalies_detected']} anomalies)")
 
     except KeyboardInterrupt:
         pass
     finally:
-        print("\n\n⏹️  Stopping services...")
+        print("\n\nStopping services...")
         coordinator.stop()
         resource_manager.stop()
         print_statistics()

@@ -37,7 +37,7 @@ def process_reading(reading):
 
 def main():
     print("="*80)
-    print("🌊 LIVE STREAM PROCESSING DEMO - REAL IOT DATA")
+    print("LIVE STREAM PROCESSING DEMO - REAL IOT DATA")
     print("="*80)
     print()
     print("Setup:")
@@ -57,7 +57,7 @@ def main():
     # Register TaskManagers
     resource_manager.register_task_manager("tm_1", "localhost", 6124, 4)
     resource_manager.register_task_manager("tm_2", "localhost", 6125, 4)
-    print("✓ Resource Manager started (2 TaskManagers registered)")
+    print("- Resource Manager started (2 TaskManagers registered)")
 
     # Start checkpoint coordinator
     coordinator = CheckpointCoordinator(
@@ -66,7 +66,7 @@ def main():
         checkpoint_timeout_ms=10000    # 10 second timeout
     )
     coordinator.start()
-    print("✓ Checkpoint Coordinator started")
+    print("- Checkpoint Coordinator started")
     print()
 
     # Simulate tasks
@@ -82,7 +82,7 @@ def main():
     last_checkpoint = time.time()
     run_until = time.time() + 20  # Run for 20 seconds
 
-    print("🚀 PROCESSING STARTED - Real-time output:")
+    print("PROCESSING STARTED - Real-time output:")
     print("-" * 80)
 
     try:
@@ -96,12 +96,12 @@ def main():
 
             # Display interesting events
             if is_anomaly:
-                print(f"⚠️  ANOMALY: {reading['sensor_id']} in {reading['location']} - "
+                print(f"ANOMALY: {reading['sensor_id']} in {reading['location']} - "
                       f"Temp: {reading['temperature']:5.1f}°C, Humidity: {reading['humidity']:5.1f}%")
             elif stats["total_readings"] % 10 == 0:
                 elapsed = time.time() - stats["start_time"]
                 throughput = stats["total_readings"] / elapsed if elapsed > 0 else 0
-                print(f"📊 Processed {stats['total_readings']:3d} readings "
+                print(f"Processed {stats['total_readings']:3d} readings "
                       f"({throughput:5.1f} readings/sec, "
                       f"{stats['anomalies']:2d} anomalies detected)")
 
@@ -130,18 +130,18 @@ def main():
                 latest = coordinator.get_latest_checkpoint()
                 if latest and latest.checkpoint_id == checkpoint_id:
                     stats["checkpoints"] += 1
-                    print(f"✅ CHECKPOINT {checkpoint_id} completed - State saved "
+                    print(f"CHECKPOINT {checkpoint_id} completed - State saved "
                           f"({stats['total_readings']} readings, {stats['anomalies']} anomalies)")
 
                 last_checkpoint = time.time()
 
     except KeyboardInterrupt:
-        print("\n\n⏸️  Interrupted by user")
+        print("\n\nInterrupted by user")
 
     # Final statistics
     print()
     print("="*80)
-    print("📈 FINAL STATISTICS")
+    print("FINAL STATISTICS")
     print("="*80)
 
     elapsed = time.time() - stats["start_time"]
@@ -158,39 +158,39 @@ def main():
     # Verify checkpoint data
     latest_checkpoint = coordinator.get_latest_checkpoint()
     if latest_checkpoint:
-        print(f"✅ Latest Checkpoint: #{latest_checkpoint.checkpoint_id}")
+        print(f"Latest Checkpoint: #{latest_checkpoint.checkpoint_id}")
         print(f"   Tasks with state: {len(latest_checkpoint.task_states)}")
         print(f"   Status: {latest_checkpoint.status.value}")
 
     # Resource manager stats
     rm_stats = resource_manager.get_statistics()
     print()
-    print(f"📊 Resource Manager:")
+    print(f"Resource Manager:")
     print(f"   Active TaskManagers: {rm_stats['active_task_managers']}")
     print(f"   Total Slots: {rm_stats['total_slots']}")
     print(f"   Available Slots: {rm_stats['available_slots']}")
 
     print()
     print("="*80)
-    print("✅ ALL COMPONENTS WORKING CORRECTLY!")
+    print("ALL COMPONENTS WORKING CORRECTLY!")
     print("="*80)
     print()
     print("Verified:")
-    print("  ✓ Real data ingestion (IoT sensors)")
-    print("  ✓ Stream processing (anomaly detection)")
-    print("  ✓ Checkpointing (automatic every 5 seconds)")
-    print("  ✓ State management (readings + anomaly counts)")
-    print("  ✓ Resource management (2 TaskManagers)")
-    print("  ✓ Thread safety (concurrent operations)")
-    print("  ✓ Timeout handling (no memory leaks)")
-    print("  ✓ All fixes validated")
+    print("  - Real data ingestion (IoT sensors)")
+    print("  - Stream processing (anomaly detection)")
+    print("  - Checkpointing (automatic every 5 seconds)")
+    print("  - State management (readings + anomaly counts)")
+    print("  - Resource management (2 TaskManagers)")
+    print("  - Thread safety (concurrent operations)")
+    print("  - Timeout handling (no memory leaks)")
+    print("  - All fixes validated")
     print()
 
     # Cleanup
-    print("🧹 Cleaning up...")
+    print("Cleaning up...")
     coordinator.stop()
     resource_manager.stop()
-    print("✓ Shutdown complete")
+    print("- Shutdown complete")
     print()
 
 if __name__ == "__main__":
