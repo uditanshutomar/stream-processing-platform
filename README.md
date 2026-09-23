@@ -1,12 +1,20 @@
 # Distributed Stream Processing Platform
 
-A production-grade stream processing system inspired by Apache Flink, implementing exactly-once semantics, fault tolerance, and high-throughput data processing with Python.
+A distributed systems course project inspired by Apache Flink. Built in Python, it explores job scheduling, worker coordination, checkpoint metadata, RocksDB-backed state, and recovery in a master-worker architecture.
+
+## Start here
+
+- [Scheduler](jobmanager/scheduler.py): task placement and execution planning
+- [Checkpoint coordinator](jobmanager/checkpoint_coordinator.py): checkpoint lifecycle, acknowledgments, and storage
+- [Task execution](taskmanager/task_executor.py) and [state backends](taskmanager/state/)
+- [Docker Compose deployment](deployment/docker-compose.yml): services, dependencies, and actual host ports
+
+**Project scope:** this is an educational implementation, not a production-hardened Flink replacement. Checkpoint barrier dispatch includes a placeholder in the coordinator, so end-to-end exactly-once processing is not established by the current code. Component benchmarks are not evidence of distributed throughput.
 
 ---
-# Team
+## Team
 
-Uditanshu Tomar (Uditanshu.tomar@colorado.edu), 
-Ishneet Chadha (Ishneet.chadha@colorado.edu)
+[Uditanshu Tomar](https://github.com/uditanshutomar) and Ishneet Chadha
 
 ## How to Run
 
@@ -17,7 +25,9 @@ Ishneet Chadha (Ishneet.chadha@colorado.edu)
 *   **kubectl** (only for GCP deployment)
 
 ### Option 1: Run Locally (Docker Compose)
-The easiest way to run the platform is using Docker Compose.
+The checked-in Compose configuration uses Google Cloud Storage for checkpoints. Before starting it, replace `GCS_CHECKPOINT_PATH` for the JobManager and all three TaskManagers with a bucket you control, and set `GCP_KEY_PATH` to an existing credentials file with access to that bucket. The file's existing bucket is project-specific. Cloud storage access can incur charges.
+
+Clone the repository and run the following commands from its root. Docker Compose runs the services locally; checkpoint storage still uses GCS.
 
 1.  **Navigate to deployment directory:**
     ```bash
@@ -26,7 +36,7 @@ The easiest way to run the platform is using Docker Compose.
 
 2.  **Start the cluster:**
     ```bash
-    docker-compose up -d
+    docker compose up -d --build
     ```
 
 3.  **Access the Dashboard:**
@@ -39,7 +49,7 @@ The easiest way to run the platform is using Docker Compose.
 
 5.  **Stop the cluster:**
     ```bash
-    docker-compose down
+    docker compose down
     ```
 
 ### Option 2: Run on Google Cloud Platform (GKE)
@@ -105,9 +115,9 @@ curl http://localhost:8081/jobs/{job_id}/status
 
 ## Features
 
-*   **Exactly-Once Processing**: Distributed snapshots (Chandy-Lamport).
-*   **Fault Tolerance**: Automatic failure recovery.
-*   **High Throughput**: Operator chaining & flow control.
+*   **Checkpoint Coordination**: Snapshot metadata and acknowledgments, with incomplete barrier dispatch.
+*   **Failure Recovery**: Worker health monitoring and recovery paths.
+*   **Execution Design**: Operator chaining and flow control.
 *   **Stateful Operations**: Windowing, Aggregations, Joins.
 *   **Observability**: Prometheus metrics & Grafana dashboards.
 
@@ -135,8 +145,8 @@ Key environment variables in `deployment/docker-compose.yml`:
 
 ## Monitoring
 
-*   **Grafana**: [http://localhost:3000](http://localhost:3000) (admin/admin)
-*   **Prometheus**: [http://localhost:9090](http://localhost:9090)
+*   **Grafana**: [http://localhost:3001](http://localhost:3001) (admin/admin)
+*   **Prometheus**: [http://localhost:9095](http://localhost:9095)
 
 ---
 
